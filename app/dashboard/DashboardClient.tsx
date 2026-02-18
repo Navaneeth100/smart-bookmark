@@ -17,19 +17,34 @@ export default function DashboardClient() {
         getUser()
         fetchBookmarks()
 
-        const channel = supabase
-            .channel('bookmarks-changes')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'bookmarks' },
-                () => {
-                    fetchBookmarks()
-                }
-            )
-            .subscribe()
+        let channel: any
+
+        const setupRealtime = async () => {
+            const { data: { session } } = await supabase.auth.getSession()
+
+            if (!session) return
+
+            channel = supabase
+                .channel('bookmarks-changes', {
+                    config: {
+                        broadcast: { self: true },
+                        presence: { key: session.user.id },
+                    },
+                })
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'bookmarks' },
+                    () => {
+                        fetchBookmarks()
+                    }
+                )
+                .subscribe()
+        }
+
+        setupRealtime()
 
         return () => {
-            supabase.removeChannel(channel)
+            if (channel) supabase.removeChannel(channel)
         }
     }, [])
 
